@@ -1,4 +1,5 @@
 import asyncio
+import urllib.parse
 from tinyfish import TinyFish, CompleteEvent
 from app.core.config import settings
 from app.models.schemas import UserIntent, DealItem
@@ -7,88 +8,100 @@ from typing import List
 
 logger = logging.getLogger(__name__)
 
-# Initialize the official TinyFish client
-client = TinyFish(api_key=settings.TINYFISH_API_KEY)
+# Two dedicated clients — one per platform for TRUE parallel execution
+swiggy_client = TinyFish(api_key=settings.TINYFISH_API_KEY)
+zomato_client = TinyFish(api_key=settings.TINYFISH_API_KEY_2 or settings.TINYFISH_API_KEY)
 
-def _run_agent_sync(platform: str, url: str, intent: UserIntent) -> List[DealItem]:
+
+def _build_goal(platform: str, intent: UserIntent) -> str:
+    """Builds a highly platform-specific, concise goal string for TinyFish."""
+    base = intent.agent_goal or f"Search for {intent.category}. Diet: {intent.diet}. Budget under {intent.budget} INR."
+    
+    if platform == "Swiggy":
+        return f"""
+SPEED MODE: You are on Swiggy's search results page. Do the following instantly:
+1. Look at the visible restaurant cards on screen. Do NOT scroll more than once.
+2. Find up to 3 items matching: {base}
+3. For each item extract: restaurant name, item name, price, delivery fee, discount, rating, and URL.
+4. Return JSON immediately and STOP. Do not click anything else.
+"""
+    else:  # Zomato
+        return f"""
+SPEED MODE: You are on Zomato's search results page. Do the following instantly:
+1. You will see restaurant cards. Do NOT scroll more than once.
+2. Find up to 3 restaurants matching: {base}
+3. For each result extract: restaurant name, item name (the searched dish), price, delivery fee, discount, rating, and URL.
+4. Return JSON immediately and STOP. Do not open any restaurant. Do not click menus.
+"""
+
+
+def _run_agent_sync(platform: str, client: TinyFish, url: str, intent: UserIntent) -> List[DealItem]:
     """
-    Synchronous function to run the TinyFish agent. We will wrap this in a thread
-    so it doesn't block the FastAPI async event loop.
+    Synchronous function to run a TinyFish agent. Wrapped in a thread to avoid blocking FastAPI.
     """
-    # Log the exact prompt being sent to TinyFish so the user can see it!
-    logger.info(f"\n{'='*50}\n🧠 SENDING THIS EXACT PROMPT TO {platform} TINYFISH:\n{intent.agent_goal}\n{'='*50}\n")
+    goal = _build_goal(platform, intent)
     
-    goal = f"""
-    [CRITICAL SPEED OVERRIDE]: Execute as fast as physically possible. Do NOT explore or scroll excessively. Once you find 3 valid items, extract them and STOP INSTANTLY.
-    
-    {intent.agent_goal if intent.agent_goal else f"Search for {intent.category}. Diet: {intent.diet}. Budget under {intent.budget} INR."}
-    
-    You MUST return the result strictly in this exact JSON format:
-    {{
+    # Log the exact prompt so you can monitor it in Render logs
+    logger.info(f"\n{'='*60}\n🧠 PROMPT → {platform}:\n{goal}\n{'='*60}")
+
+    output_format = """
+    You MUST return ONLY valid JSON in this exact format, nothing else:
+    {
         "results": [
-            {{
+            {
                 "restaurant_name": "string",
                 "item_name": "string",
-                "price": number (extract just the number),
-                "delivery_fee": number (extract just the number, 0 if free),
-                "discount": number (extract just the number, 0 if none),
-                "rating": number (e.g. 4.5),
-                "item_url": "string (url to the item or restaurant)"
-            }}
+                "price": number,
+                "delivery_fee": number,
+                "discount": number,
+                "rating": number,
+                "item_url": "string"
+            }
         ]
-    }}
+    }
     """
-
+    
+    full_goal = goal + output_format
     deals = []
+    
     try:
-        # Using the streaming SDK client exactly as documented
-        with client.agent.stream(url=url, goal=goal) as stream:
-            logger.info(f"⏳ Connected to {platform}. Agent is analyzing intent and navigating...")
-            
+        with client.agent.stream(url=url, goal=full_goal) as stream:
+            logger.info(f"⏳ {platform} agent started. Watching live...")
             for event in stream:
                 if event.type.name == "STREAMING_URL":
-                    # You can watch the agent live!
-                    logger.info(f"📺 WATCH LIVE ON {platform}: {event.streaming_url}")
-
+                    logger.info(f"📺 LIVE → {platform}: {event.streaming_url}")
                 if isinstance(event, CompleteEvent):
-                    logger.info(f"✅ {platform} Task Complete!")
+                    logger.info(f"✅ {platform} complete!")
                     result_data = event.result_json
-                    
-                    # Parse the results array
                     for item in result_data.get("results", []):
                         deals.append(DealItem(
                             platform=platform,
-                            restaurant_name=item.get("restaurant_name", "Unknown Restaurant"),
-                            item_name=item.get("item_name", "Unknown Item"),
+                            restaurant_name=item.get("restaurant_name", "Unknown"),
+                            item_name=item.get("item_name", "Unknown"),
                             price=float(item.get("price", 0)),
                             delivery_fee=float(item.get("delivery_fee", 0)),
                             discount=float(item.get("discount", 0)),
                             rating=float(item.get("rating", 0.0)),
                             item_url=item.get("item_url", url)
                         ))
-                    break 
-                    
+                    break
     except Exception as e:
-        logger.error(f"❌ Error running {platform} agent: {e}")
-        
+        logger.error(f"❌ {platform} agent error: {e}")
+
     return deals
 
+
 async def run_swiggy_agent(intent: UserIntent) -> List[DealItem]:
-    """
-    Triggers the headless web agent on Swiggy using TinyFish SDK.
-    """
-    import urllib.parse
+    """Runs the Swiggy agent using the dedicated Swiggy TinyFish client."""
     search_query = urllib.parse.quote(intent.category)
-    # Start directly on the search page to skip 4 steps and save 30 seconds!
-    direct_url = f"https://www.swiggy.com/search?query={search_query}"
-    return await asyncio.to_thread(_run_agent_sync, "Swiggy", direct_url, intent)
+    url = f"https://www.swiggy.com/search?query={search_query}"
+    logger.info(f"🚀 Swiggy agent starting at: {url}")
+    return await asyncio.to_thread(_run_agent_sync, "Swiggy", swiggy_client, url, intent)
+
 
 async def run_zomato_agent(intent: UserIntent) -> List[DealItem]:
-    """
-    Triggers the headless web agent on Zomato using TinyFish SDK.
-    """
-    import urllib.parse
+    """Runs the Zomato agent using the dedicated Zomato TinyFish client."""
     search_query = urllib.parse.quote(intent.category)
-    # Start directly on the search page to skip Zomato's complex homepage UI
-    direct_url = f"https://www.zomato.com/search?q={search_query}"
-    return await asyncio.to_thread(_run_agent_sync, "Zomato", direct_url, intent)
+    url = f"https://www.zomato.com/search?q={search_query}"
+    logger.info(f"🚀 Zomato agent starting at: {url}")
+    return await asyncio.to_thread(_run_agent_sync, "Zomato", zomato_client, url, intent)

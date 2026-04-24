@@ -31,31 +31,44 @@ async def parse_intent(user_input: str, user_profile: dict = None) -> UserIntent
     """
     
     system_prompt = f"""
-    You are the central intelligence layer for an autonomous food delivery AI agent (TinyFish).
-    Your goal is to parse the user's raw prompt into structured JSON while strictly applying their profile constraints.
-    
+    You are the AI brain of an autonomous food delivery agent. Your only job is to convert the user's raw text request into a structured JSON, following their saved profile constraints exactly.
+
     {profile_context}
-    
-    Instructions:
-    1. If the user does not specify a diet, strictly enforce their profile diet.
-    2. If the user does not specify a budget, use their profile default budget.
-    3. If the user asks for "my favorite food", prioritize their Favorite Dishes.
-    4. If the user mentions a location label (e.g. "Home"), replace it with the exact address from Saved Locations.
-    5. Formulate an ULTRA-COMPRESSED 'agent_goal' string. Speed is your absolute priority. 
-       Do NOT give complex step-by-step logic. Give direct, imperative commands and tell the agent to STOP immediately after finding just 3 matching results to save time.
-       Example agent_goal: "Set location to 123 Main St. Search 'Chicken Biryani'. Find 3 results under 300 INR avoiding Peanuts. Extract JSON and STOP INSTANTLY."
-    
-    Extract the user's intent into the following JSON format:
+
+    CRITICAL RULES:
+    1. Diet: Always enforce profile diet UNLESS user explicitly overrides it.
+    2. Budget: Use profile default budget if user doesn't mention one.
+    3. Allergies: These are HARD blocks. They must ALWAYS appear in agent_goal as "STRICTLY AVOID [allergy]".
+    4. RESTAURANT vs LOCATION DETECTION (very important!):
+       - If user says "in hotel X", "at restaurant X", "from cafe X" → X is a RESTAURANT NAME, NOT a delivery location.
+       - If user says "deliver to X", "near X", "in [city/area]" → X is a DELIVERY LOCATION.
+       - Only replace with saved address if user says a saved location label like "Home" or "Office".
+    5. AGENT GOAL FORMAT: The agent_goal will be injected into a browser AI that is ALREADY on the search results page of Swiggy or Zomato. So:
+       - DO NOT say "go to Swiggy" or "open Zomato" — the agent is already there.
+       - DO NOT say "set location" — location is already set by the search URL.
+       - If user mentioned a restaurant: start with "Look for items ONLY from [Restaurant Name] in the visible results."
+       - Keep it under 3 sentences. Be imperative and direct.
+       - Always end with: "Find 3 results. Extract JSON and STOP."
+
+    GOOD example (restaurant filter):
+    User: "best veg dish in hotel Ajinkya with discount"
+    agent_goal: "Look for items ONLY from Hotel Ajinkya in the visible results. Filter for veg dishes with maximum discount. Find 3 results. Extract JSON and STOP."
+
+    GOOD example (general search):
+    User: "chicken biryani under 250"
+    agent_goal: "Find veg chicken biryani under ₹250. STRICTLY AVOID Peanuts. Find 3 results. Extract JSON and STOP."
+
+    Extract the user's intent into the following JSON:
     {{
-        "category": "food category or specific item",
+        "category": "specific food item or dish name",
         "diet": "veg or non-veg",
-        "budget": maximum price as a number,
-        "location": "exact address or location",
-        "task_type": "Discovery" or "Search",
-        "agent_goal": "The highly specific instruction prompt for the TinyFish autonomous agent.",
-        "preferred_platforms": ["Swiggy"] // array of strings based on profile
+        "budget": maximum price as a number or null,
+        "location": "delivery address if explicitly mentioned, else null",
+        "task_type": "Discovery or Search",
+        "agent_goal": "concise 2-3 sentence TinyFish browser instruction",
+        "preferred_platforms": ["Swiggy", "Zomato"] // based on profile, or both if not specified
     }}
-    Respond ONLY with valid JSON. Do not include any markdown formatting or extra text.
+    Respond ONLY with valid JSON. No markdown, no explanation.
     """
     
     try:
