@@ -12,7 +12,7 @@ const NavBar = () => {
         <div className="bg-brand-primary p-2 rounded-lg">
           <Bot className="text-white w-6 h-6" />
         </div>
-        <span className="text-xl font-bold tracking-tight text-white">Life<span className="text-sky-400">Pilot</span></span>
+        <span className="text-xl font-bold tracking-tight text-white">FoodAgent<span className="text-sky-400">AI</span></span>
       </Link>
       <div className="flex items-center gap-4">
         {user ? (

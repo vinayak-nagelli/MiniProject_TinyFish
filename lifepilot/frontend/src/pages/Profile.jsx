@@ -125,7 +125,7 @@ const Profile = () => {
                 AI Training Constraints
               </h1>
               <p className="text-slate-400 max-w-2xl text-lg">
-                Your personalized context layer. The LifePilot agent will strictly adhere to these rules 
+                Your personalized context layer. The Food Agent AI will strictly adhere to these rules 
                 when autonomously parsing your goals and navigating the web.
               </p>
             </div>

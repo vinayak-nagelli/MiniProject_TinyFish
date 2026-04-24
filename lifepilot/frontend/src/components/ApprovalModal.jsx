@@ -34,7 +34,7 @@ export default function ApprovalModal({ isOpen, onClose, selectedItem }) {
 
             <h2 className="text-2xl font-bold text-white mb-2">Human Approval Required</h2>
             <p className="text-slate-400 text-sm mb-6">
-              LifePilot has successfully navigated {selectedItem.platform} and staged your order. Please confirm to finalize payment.
+              Food Agent AI has successfully navigated {selectedItem.platform} and staged your order. Please confirm to finalize payment.
             </p>
 
             <div className="bg-slate-800 rounded-xl p-4 mb-6">
