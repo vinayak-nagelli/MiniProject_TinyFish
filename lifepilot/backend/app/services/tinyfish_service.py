@@ -102,6 +102,15 @@ async def run_swiggy_agent(intent: UserIntent) -> List[DealItem]:
 async def run_zomato_agent(intent: UserIntent) -> List[DealItem]:
     """Runs the Zomato agent using the dedicated Zomato TinyFish client."""
     search_query = urllib.parse.quote(intent.category)
-    url = f"https://www.zomato.com/search?q={search_query}"
-    logger.info(f"🚀 Zomato agent starting at: {url}")
+    
+    # Extract city from intent location to build a direct city URL.
+    # This avoids Zomato's generic-to-city redirect which causes TinyFish to spawn a 2nd browser session!
+    city = "pune"  # Default fallback city
+    if intent.location:
+        # Try to extract last word from location as city (e.g. "pimpri chinchwad" -> "pimpri-chinchwad")
+        city = intent.location.strip().lower().replace(" ", "-")
+    
+    # Direct city URL → no redirect → single browser session → saves 30-45 seconds!
+    url = f"https://www.zomato.com/{city}/search?q={search_query}"
+    logger.info(f"🚀 Zomato agent starting at: {url} (city-direct to avoid redirect)")
     return await asyncio.to_thread(_run_agent_sync, "Zomato", zomato_client, url, intent)
