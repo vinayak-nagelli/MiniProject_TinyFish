@@ -1,0 +1,13 @@
+fastapi
+uvicorn
+motor
+redis
+pydantic-settings
+python-dotenv
+groq
+httpx
+tinyfish
+passlib[bcrypt]
+pyjwt
+email-validator
+python-multipart
