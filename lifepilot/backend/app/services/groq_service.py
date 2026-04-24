@@ -51,7 +51,7 @@ EXAMPLES:
 
 Return ONLY this JSON with no extra text, comments, or markdown:
 {{
-    "category": "specific food item name",
+    "category": "specific food item name - NEVER null, if vague use 'non-veg food' or 'veg food' or 'best food'",
     "diet": "veg or non-veg",
     "budget": 500,
     "location": null,
@@ -81,6 +81,10 @@ Return ONLY this JSON with no extra text, comments, or markdown:
         # Ensure budget is always a number
         if result_json.get("budget") is None:
             result_json["budget"] = budget
+        
+        # Ensure category is never null (Groq sometimes returns None for vague queries)
+        if not result_json.get("category"):
+            result_json["category"] = user_input  # fall back to raw user text
         
         # Clean up string 'null' that Groq sometimes outputs
         if result_json.get("location") in ["null", "None", ""]:
