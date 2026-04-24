@@ -14,6 +14,7 @@ def _run_agent_sync(platform: str, url: str, intent: UserIntent) -> List[DealIte
     """
     Synchronous function to run the TinyFish agent. We will wrap this in a thread
     so it doesn't block the FastAPI async event loop.
+    """
     # Log the exact prompt being sent to TinyFish so the user can see it!
     logger.info(f"\n{'='*50}\n🧠 SENDING THIS EXACT PROMPT TO {platform} TINYFISH:\n{intent.agent_goal}\n{'='*50}\n")
     
