@@ -81,7 +81,16 @@ Return ONLY this JSON with no extra text, comments, or markdown:
         # Ensure budget is always a number
         if result_json.get("budget") is None:
             result_json["budget"] = budget
+        
+        # Clean up string 'null' that Groq sometimes outputs
+        if result_json.get("location") in ["null", "None", ""]:
+            result_json["location"] = None
 
+        # Ensure task_type has a valid value
+        if not result_json.get("task_type"):
+            result_json["task_type"] = "Search"
+
+        logger.info(f"Final intent going to TinyFish: category={result_json.get('category')}, agent_goal={result_json.get('agent_goal')}")
         intent = UserIntent(**result_json)
         return intent
         
