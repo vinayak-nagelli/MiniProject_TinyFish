@@ -14,8 +14,8 @@ def _run_agent_sync(platform: str, url: str, intent: UserIntent) -> List[DealIte
     """
     Synchronous function to run the TinyFish agent. We will wrap this in a thread
     so it doesn't block the FastAPI async event loop.
-    """
-    logger.info(f"🚀 Starting {platform} Smart Agent...")
+    # Log the exact prompt being sent to TinyFish so the user can see it!
+    logger.info(f"\n{'='*50}\n🧠 SENDING THIS EXACT PROMPT TO {platform} TINYFISH:\n{intent.agent_goal}\n{'='*50}\n")
     
     goal = f"""
     [CRITICAL SPEED OVERRIDE]: Execute as fast as physically possible. Do NOT explore or scroll excessively. Once you find 3 valid items, extract them and STOP INSTANTLY.
@@ -76,12 +76,18 @@ async def run_swiggy_agent(intent: UserIntent) -> List[DealItem]:
     """
     Triggers the headless web agent on Swiggy using TinyFish SDK.
     """
-    # Use asyncio.to_thread to prevent the synchronous SDK call from blocking FastAPI
-    return await asyncio.to_thread(_run_agent_sync, "Swiggy", "https://www.swiggy.com/", intent)
+    import urllib.parse
+    search_query = urllib.parse.quote(intent.category)
+    # Start directly on the search page to skip 4 steps and save 30 seconds!
+    direct_url = f"https://www.swiggy.com/search?query={search_query}"
+    return await asyncio.to_thread(_run_agent_sync, "Swiggy", direct_url, intent)
 
 async def run_zomato_agent(intent: UserIntent) -> List[DealItem]:
     """
     Triggers the headless web agent on Zomato using TinyFish SDK.
     """
-    # Use asyncio.to_thread to prevent the synchronous SDK call from blocking FastAPI
-    return await asyncio.to_thread(_run_agent_sync, "Zomato", "https://www.zomato.com/", intent)
+    import urllib.parse
+    search_query = urllib.parse.quote(intent.category)
+    # Start directly on the search page to skip Zomato's complex homepage UI
+    direct_url = f"https://www.zomato.com/search?q={search_query}"
+    return await asyncio.to_thread(_run_agent_sync, "Zomato", direct_url, intent)
